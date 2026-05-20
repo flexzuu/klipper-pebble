@@ -1,29 +1,32 @@
 {
   "name": "klipper-pebble",
-  "author": "MakeAwesomeHappen",
-  "version": "1.0.0",
-  "keywords": ["pebble-app"],
+  "author": "Will Spooner",
+  "version": "0.1.0",
+  "keywords": [
+    "pebble-app"
+  ],
   "private": true,
   "dependencies": {},
   "pebble": {
-    "displayName": "klipper-pebble",
+    "displayName": "Klipper",
     "uuid": "51584333-1ada-4460-8a16-f42fe191d654",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
-      "aplite",
-      "basalt",
-      "chalk",
-      "diorite",
-      "emery",
-      "flint",
-      "gabbro"
+      "emery"
     ],
     "watchapp": {
       "watchface": false
     },
     "messageKeys": [
-      "dummy"
+      "NozzleTemp",
+      "NozzleTarget",
+      "BedTemp",
+      "BedTarget",
+      "PrintState",
+      "PrintProgress",
+      "PrintTimeLeft",
+      "RequestUpdate"
     ],
     "resources": {
       "media": []
