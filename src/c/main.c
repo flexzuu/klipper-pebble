@@ -1,11 +1,46 @@
 #include "message_keys.auto.h"
 #include <pebble.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
+#define NUM_CARDS   3
+#define CARD_BED    0
+#define CARD_NOZZLE 1
+#define CARD_PRINT  2
+
+#define BG_BED    GColorOxfordBlue
+#define BG_NOZZLE GColorBulgarianRose
+#define BG_PRINT  GColorArmyGreen
+
+#define LABEL_TEXT_BED_TEMP "BED TEMP"
+#define LABEL_TEXT_NOZZLE   "NOZZLE"
+#define LABEL_TEXT_PRINT    "PRINT"
+
+#define VALUE_TEXT_DONE  "Done"
+#define VALUE_TEXT_ERROR "Error"
+#define VALUE_TEXT_IDLE  "Idle"
+
+#define SUBTEXT_TEXT_HEATING    "Heating.."
+#define SUBTEXT_TEXT_AT_TARGET  "At target"
+#define SUBTEXT_TEXT_HEATER_OFF "Heater off"
+#define SUBTEXT_TEXT_COMPLETE   "Print complete"
+#define SUBTEXT_TEXT_PAUSED     "Paused"
+#define SUBTEXT_TEXT_ERROR      "Check printer"
+#define SUBTEXT_TEXT_READY      "Ready"
+
 static Window *s_window;
-static TextLayer *s_text_layer;
+static TextLayer *s_label_layer;
+static TextLayer *s_value_layer;
+static TextLayer *s_subtext_layer;
 static StatusBarLayer *s_status_bar;
+static Layer *s_canvas_layer;
+
+static int s_current_card = CARD_BED;
+
+static char s_label_buf[16];
+static char s_value_buf[16];
+static char s_subtext_buf[16];
 
 static const uint32_t s_inbox_size = 256;
 static const uint32_t s_outbox_size = 64;
@@ -15,15 +50,15 @@ static int s_nozzle_temp = 0, s_nozzle_target = 0, s_bed_temp = 0, s_bed_target 
 static char s_print_state[16] = "standby";
 
 static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(s_text_layer, "Select");
+  text_layer_set_text(s_label_layer, "Select");
 }
 
 static void prv_up_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(s_text_layer, "Up");
+  text_layer_set_text(s_label_layer, "Up");
 }
 
 static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(s_text_layer, "Down");
+  text_layer_set_text(s_label_layer, "Down");
 }
 
 static void prv_click_config_provider(void *context) {
@@ -32,21 +67,119 @@ static void prv_click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_DOWN, prv_down_click_handler);
 }
 
+static void prv_canvas_update_proc(Layer *layer, GContext *context) {
+}
+
+static void prv_format_time_remaining(int seconds, char *buf, int buf_size) {
+  if (seconds <= 0) {
+    snprintf(buf, buf_size, "-- : --");
+    return;
+  }
+  int h = seconds / 3600;
+  int m = (seconds % 3600) / 60;
+  if (h > 0) {
+    snprintf(buf, buf_size, "%dh %02dm left", h, m);
+  } else {
+    snprintf(buf, buf_size, "%dm left", m);
+  }
+}
+
+static void prv_set_heater_content(char *label_text, int temp, int target) {
+  snprintf(s_label_buf, sizeof(s_label_buf), "%s", label_text);
+  snprintf(s_value_buf, sizeof(s_value_buf), "%d\u00B0 / %d\u00B0", temp, target);
+  if (target > 0 && temp < target) {
+    snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_HEATING);
+  } else if (target > 0) {
+    snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_AT_TARGET);
+  } else {
+    snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_HEATER_OFF);
+  }
+}
+
+static void prv_update_card_text(int card) {
+  switch (card) {
+  case CARD_BED:
+    prv_set_heater_content(LABEL_TEXT_BED_TEMP, s_bed_temp, s_bed_target);
+    break;
+  case CARD_NOZZLE:
+    prv_set_heater_content(LABEL_TEXT_NOZZLE, s_nozzle_temp, s_nozzle_target);
+    break;
+  case CARD_PRINT:
+    snprintf(s_label_buf, sizeof(s_label_buf), LABEL_TEXT_PRINT);
+    if (strcmp(s_print_state, "printing") == 0) {
+      snprintf(s_value_buf, sizeof(s_value_buf), "%d%%", s_print_progress);
+      prv_format_time_remaining(s_print_time_left, s_subtext_buf, sizeof(s_subtext_buf));
+    } else if (strcmp(s_print_state, "complete") == 0) {
+      snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_DONE);
+      snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_COMPLETE);
+    } else if (strcmp(s_print_state, "paused") == 0) {
+      snprintf(s_value_buf, sizeof(s_value_buf), "%d%%", s_print_progress);
+      snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_PAUSED);
+    } else if (strcmp(s_print_state, "error") == 0) {
+      snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_ERROR);
+      snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_ERROR);
+    } else {
+      snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_IDLE);
+      snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_ERROR);
+    }
+    break;
+  }
+
+  text_layer_set_text(s_label_layer, s_label_buf);
+  text_layer_set_text(s_value_layer, s_value_buf);
+  text_layer_set_text(s_subtext_layer, s_subtext_buf);
+}
+
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
-  // GRect bounds = layer_get_bounds(window_layer);
+  GRect bounds = layer_get_bounds(window_layer);
 
   s_status_bar = status_bar_layer_create();
   status_bar_layer_set_colors(s_status_bar, GColorBlack, GColorWhite);
   status_bar_layer_set_separator_mode(s_status_bar, StatusBarLayerSeparatorModeNone);
   layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
 
-  // int content_y = STATUS_BAR_LAYER_HEIGHT;
-  // int content_h = bounds.size.h - STATUS_BAR_LAYER_HEIGHT;
+  int content_y = STATUS_BAR_LAYER_HEIGHT;
+  int content_h = bounds.size.h - STATUS_BAR_LAYER_HEIGHT;
+
+  s_canvas_layer = layer_create(GRect(0, content_y, bounds.size.w, content_h));
+  layer_set_update_proc(s_canvas_layer, prv_canvas_update_proc);
+  layer_add_child(window_layer, s_canvas_layer);
+
+  int icon_h = (content_h * 55) / 100;
+
+  // Label
+  int label_y = content_y + icon_h;
+  s_label_layer = text_layer_create(GRect(0, label_y, bounds.size.w, 22));
+  text_layer_set_background_color(s_label_layer, GColorClear);
+  text_layer_set_text_color(s_label_layer, GColorLightGray);
+  text_layer_set_text_alignment(s_label_layer, GTextAlignmentCenter);
+  text_layer_set_font(s_label_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  layer_add_child(window_layer, text_layer_get_layer(s_label_layer));
+
+  // Value — large, prominent
+  int value_y = label_y + 20;
+  s_value_layer = text_layer_create(GRect(0, value_y, bounds.size.w, 36));
+  text_layer_set_background_color(s_value_layer, GColorClear);
+  text_layer_set_text_color(s_value_layer, GColorWhite);
+  text_layer_set_text_alignment(s_value_layer, GTextAlignmentCenter);
+  text_layer_set_font(s_value_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+  layer_add_child(window_layer, text_layer_get_layer(s_value_layer));
+
+  // Sub-text
+  int sub_y = value_y + 34;
+  s_subtext_layer = text_layer_create(GRect(0, sub_y, bounds.size.w, 22));
+  text_layer_set_background_color(s_subtext_layer, GColorClear);
+  text_layer_set_text_color(s_subtext_layer, GColorDarkGray);
+  text_layer_set_text_alignment(s_subtext_layer, GTextAlignmentCenter);
+  text_layer_set_font(s_subtext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  layer_add_child(window_layer, text_layer_get_layer(s_subtext_layer));
+
+  prv_update_card_text(s_current_card);
 }
 
 static void prv_window_unload(Window *window) {
-  text_layer_destroy(s_text_layer);
+  text_layer_destroy(s_label_layer);
 }
 
 static void prv_inbox_received_callback(DictionaryIterator *iter, void *context) {
