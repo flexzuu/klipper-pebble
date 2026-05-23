@@ -47,7 +47,7 @@ function fetchPrinterStatus() {
       Pebble.sendAppMessage(
         dict,
         function () {
-          console.log("Data sent to watch " + nozzleTemp);
+          console.log("Data sent to watch");
         },
         function (e) {
           console.log("Send failed: " + JSON.stringify(e));
