@@ -1,3 +1,4 @@
+#include "drawing.h"
 #include "message_keys.auto.h"
 #include <pebble.h>
 #include <stddef.h>
@@ -36,11 +37,15 @@ static TextLayer *s_subtext_layer;
 static StatusBarLayer *s_status_bar;
 static Layer *s_canvas_layer;
 
-static int s_current_card = CARD_BED;
+// static int s_current_card = CARD_BED;
+static int s_current_card = CARD_NOZZLE;
 
-static char s_label_buf[16];
-static char s_value_buf[16];
-static char s_subtext_buf[16];
+static char s_label_buf[32];
+static char s_value_buf[32];
+static char s_subtext_buf[32];
+
+static int s_anim_frame = 0;
+static int s_icon_area_h = 0;
 
 static const uint32_t s_inbox_size = 256;
 static const uint32_t s_outbox_size = 64;
@@ -49,16 +54,37 @@ static int s_nozzle_temp = 0, s_nozzle_target = 0, s_bed_temp = 0, s_bed_target 
            s_print_progress = 0, s_print_time_left = 0;
 static char s_print_state[16] = "standby";
 
+static void prv_draw_card_icon(GContext *ctx, int card, GRect bounds) {
+  switch (card) {
+  case CARD_BED:
+    drawing_draw_bed(ctx, bounds, s_anim_frame, s_bed_target);
+    break;
+  case CARD_NOZZLE:
+    drawing_draw_nozzle(ctx, bounds, s_anim_frame, s_nozzle_target);
+    break;
+  case CARD_PRINT:
+    drawing_draw_print(ctx, bounds, s_anim_frame, s_print_progress, s_print_state);
+    break;
+  }
+}
+
 static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(s_label_layer, "Select");
 }
 
 static void prv_up_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(s_label_layer, "Up");
+  if (s_current_card >= NUM_CARDS - 1) {
+    return;
+  }
+  s_current_card += 1;
+  layer_mark_dirty(s_canvas_layer);
 }
 
 static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(s_label_layer, "Down");
+  if (s_current_card <= 0) {
+    return;
+  }
+  s_current_card -= 1;
+  layer_mark_dirty(s_canvas_layer);
 }
 
 static void prv_click_config_provider(void *context) {
@@ -68,6 +94,9 @@ static void prv_click_config_provider(void *context) {
 }
 
 static void prv_canvas_update_proc(Layer *layer, GContext *context) {
+  GRect bounds = layer_get_bounds(layer);
+  bounds.size.h = s_icon_area_h;
+  prv_draw_card_icon(context, s_current_card, bounds);
 }
 
 static void prv_format_time_remaining(int seconds, char *buf, int buf_size) {
@@ -147,6 +176,7 @@ static void prv_window_load(Window *window) {
   layer_add_child(window_layer, s_canvas_layer);
 
   int icon_h = (content_h * 55) / 100;
+  s_icon_area_h = icon_h;
 
   // Label
   int label_y = content_y + icon_h;
