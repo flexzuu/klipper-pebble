@@ -30,6 +30,8 @@
 #define SUBTEXT_TEXT_ERROR      "Check printer"
 #define SUBTEXT_TEXT_READY      "Ready"
 
+#define ANIM_FRAME_MS 80 // 12.5 fps (1 / 12.5) * 1000
+
 static Window *s_window;
 static TextLayer *s_label_layer;
 static TextLayer *s_value_layer;
@@ -44,7 +46,9 @@ static char s_label_buf[32];
 static char s_value_buf[32];
 static char s_subtext_buf[32];
 
+static AppTimer *s_anim_timer = NULL;
 static int s_anim_frame = 0;
+
 static int s_icon_area_h = 0;
 
 static const uint32_t s_inbox_size = 256;
@@ -159,6 +163,12 @@ static void prv_update_card_text(int card) {
   text_layer_set_text(s_subtext_layer, s_subtext_buf);
 }
 
+static void prv_anim_timer_callback(void *context) {
+  s_anim_frame++;
+  layer_mark_dirty(s_canvas_layer);
+  s_anim_timer = app_timer_register(ANIM_FRAME_MS, prv_anim_timer_callback, NULL);
+}
+
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
@@ -206,6 +216,8 @@ static void prv_window_load(Window *window) {
   layer_add_child(window_layer, text_layer_get_layer(s_subtext_layer));
 
   prv_update_card_text(s_current_card);
+
+  s_anim_timer = app_timer_register(ANIM_FRAME_MS, prv_anim_timer_callback, NULL);
 }
 
 static void prv_window_unload(Window *window) {
