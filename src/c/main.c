@@ -12,7 +12,7 @@
 
 #define BG_BED    GColorOxfordBlue
 #define BG_NOZZLE GColorBulgarianRose
-#define BG_PRINT  GColorArmyGreen
+#define BG_PRINT  GColorIndigo
 
 #define LABEL_TEXT_BED_TEMP "BED TEMP"
 #define LABEL_TEXT_NOZZLE   "NOZZLE"
@@ -32,6 +32,9 @@
 
 #define ANIM_FRAME_MS 80 // 12.5 fps (1 / 12.5) * 1000
 
+#define CARD_TRANSITION_MS                 350
+#define CARD_TRANSITION_WIPE_SLANT_DEGREES 40
+
 static Window *s_window;
 static TextLayer *s_label_layer;
 static TextLayer *s_value_layer;
@@ -39,8 +42,11 @@ static TextLayer *s_subtext_layer;
 static StatusBarLayer *s_status_bar;
 static Layer *s_canvas_layer;
 
-// static int s_current_card = CARD_BED;
 static int s_current_card = CARD_NOZZLE;
+
+static int s_transition_direction = 0;
+static int s_transition_progress = 0;
+static bool s_transitioning = false;
 
 static char s_label_buf[32];
 static char s_value_buf[32];
@@ -69,6 +75,19 @@ static void prv_draw_card_icon(GContext *ctx, int card, GRect bounds) {
   case CARD_PRINT:
     drawing_draw_print(ctx, bounds, s_anim_frame, s_print_progress, s_print_state);
     break;
+  }
+}
+
+static GColor prv_bg_color_for_card(int card) {
+  switch (card) {
+  case CARD_BED:
+    return BG_BED;
+  case CARD_NOZZLE:
+    return BG_NOZZLE;
+  case CARD_PRINT:
+    return BG_PRINT;
+  default:
+    return GColorBlack;
   }
 }
 
@@ -158,11 +177,54 @@ static void prv_update_card_text() {
   layer_mark_dirty(s_canvas_layer);
 }
 
+static void prv_draw_transition(Layer *layer, GContext *context) {
+  int pct = (int)((s_transition_progress * 100) / ANIMATION_NORMALIZED_MAX);
+}
+
 static void prv_canvas_update_proc(Layer *layer, GContext *context) {
   GRect bounds = layer_get_bounds(layer);
-  bounds.size.h = s_icon_area_h;
-  prv_draw_card_icon(context, s_current_card, bounds);
+  if (s_transition_direction == 0) {
+    graphics_context_set_fill_color(context, prv_bg_color_for_card(s_current_card));
+    graphics_fill_rect(context, bounds, 0, GCornerNone);
+    bounds.size.h = s_icon_area_h;
+    prv_draw_card_icon(context, s_current_card, bounds);
+  } else {
+    prv_draw_transition(layer, context);
+  }
+}
+
+static void transition_setup(Animation *anim) {
+  s_transition_progress = 0;
+  s_transitioning = true;
+}
+
+static void transition_update(Animation *anim, const AnimationProgress progress) {
+  s_transition_progress = progress;
+  layer_mark_dirty(s_canvas_layer);
+}
+
+static void transition_teardown(Animation *anim) {
+  s_current_card += s_transition_direction;
+  s_transition_progress = 0;
+  s_transitioning = false;
   prv_update_card_text();
+  layer_mark_dirty(s_canvas_layer);
+}
+
+static const AnimationImplementation s_transition_impl = {
+    .setup = transition_setup,
+    .update = transition_update,
+    .teardown = transition_teardown,
+};
+
+static void prv_start_card_transition(int direction) {
+  s_transition_direction = direction;
+
+  Animation *anim = animation_create();
+  animation_set_duration(anim, CARD_TRANSITION_MS);
+  animation_set_curve(anim, AnimationCurveEaseInOut);
+  animation_set_implementation(anim, &s_transition_impl);
+  animation_schedule(anim);
 }
 
 static void prv_anim_timer_callback(void *context) {
