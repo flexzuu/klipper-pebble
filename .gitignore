@@ -2,3 +2,4 @@ build/
 __pycache__/
 .lock-waf*
 .cache
+node_modules/

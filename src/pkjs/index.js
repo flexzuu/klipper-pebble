@@ -1,16 +1,32 @@
-const MOONRAKER_URL = "http://v0.cardiff.lan";
+var Clay = require('@rebble/clay');
+var clayConfig = require('./config');
+var clay = new Clay(clayConfig);
+
 const POLL_INTERVAL_MS = 10000;
 
 var pollTimer = null;
 
+function getMoonrakerUrl() {
+  var settings = localStorage.getItem('clay-settings');
+  if (settings) {
+    try {
+      var settings = JSON.parse(settings);
+      if (settings.MoonrakerUrl) {
+        return settings.MoonrakerUrl;
+      }
+    } catch (e) {}
+  }
+  return '';
+}
+
 function fetchPrinterStatus() {
   var url =
-    MOONRAKER_URL +
-    "/printer/objects/query" +
-    "?extruder=temperature,target" +
-    "&heater_bed=temperature,target" +
-    "&print_stats=state,filename,print_duration" +
-    "&virtual_sdcard=progress";
+    getMoonrakerUrl() +
+    '/printer/objects/query' +
+    '?extruder=temperature,target' +
+    '&heater_bed=temperature,target' +
+    '&print_stats=state,filename,print_duration' +
+    '&virtual_sdcard=progress';
 
   var req = new XMLHttpRequest();
   req.onload = function () {
@@ -23,13 +39,13 @@ function fetchPrinterStatus() {
       var bedTemp = Math.round(status.heater_bed.temperature);
       var bedTarget = Math.round(status.heater_bed.target);
 
-      var printState = status.print_stats.state || "unknown";
+      var printState = status.print_stats.state || 'unknown';
       var progress = Math.round(status.virtual_sdcard.progress * 100);
 
       // Estimate time remaining from progress and elapsed duration
       var printDuration = status.print_stats.print_duration || 0;
       var timeLeft = 0;
-      if (progress > 0 && printState === "printing") {
+      if (progress > 0 && printState === 'printing') {
         var totalEstimate = printDuration / (progress / 100);
         timeLeft = Math.round(totalEstimate - printDuration);
       }
@@ -47,24 +63,24 @@ function fetchPrinterStatus() {
       Pebble.sendAppMessage(
         dict,
         function () {
-          console.log("Data sent to watch");
+          console.log('Data sent to watch');
         },
         function (e) {
-          console.log("Send failed: " + JSON.stringify(e));
+          console.log('Send failed: ' + JSON.stringify(e));
         }
       );
     } catch (err) {
-      console.log("Error parsing Moonraker response: " + err.message);
+      console.log('Error parsing Moonraker response: ' + err.message);
     }
   };
 
   req.onerror = function () {
-    console.log("XHR error - is Moonraker reachable?");
+    console.log('XHR error - is Moonraker reachable?');
     // Send an error state so the watch knows
-    Pebble.sendAppMessage({ PrintState: "error" });
+    Pebble.sendAppMessage({ PrintState: 'error' });
   };
 
-  req.open("GET", url);
+  req.open('GET', url);
   req.send();
 }
 
@@ -80,15 +96,15 @@ function stopPolling() {
   }
 }
 
-Pebble.addEventListener("ready", function () {
-  console.log("PebbleKit JS ready - starting Klipper Pebble");
+Pebble.addEventListener('ready', function () {
+  console.log('PebbleKit JS ready - starting Klipper Pebble');
   startPolling();
 });
 
-Pebble.addEventListener("appmessage", function (e) {
+Pebble.addEventListener('appmessage', function (e) {
   var dict = e.payload;
-  if (dict["RequestUpdate"]) {
-    console.log("Manual refresh requested");
+  if (dict['RequestUpdate']) {
+    console.log('Manual refresh requested');
     fetchPrinterStatus();
   }
 });
