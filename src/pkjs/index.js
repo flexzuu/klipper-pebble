@@ -1,6 +1,6 @@
 var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
-var clay = new Clay(clayConfig);
+new Clay(clayConfig);
 
 const POLL_INTERVAL_MS = 10000;
 
