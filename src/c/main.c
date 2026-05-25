@@ -129,8 +129,8 @@ static void prv_set_heater_content(char *label_text, int temp, int target) {
   }
 }
 
-static void prv_update_card_text(int card) {
-  switch (card) {
+static void prv_update_card_text() {
+  switch (s_current_card) {
   case CARD_BED:
     prv_set_heater_content(LABEL_TEXT_BED_TEMP, s_bed_temp, s_bed_target);
     break;
@@ -161,6 +161,7 @@ static void prv_update_card_text(int card) {
   text_layer_set_text(s_label_layer, s_label_buf);
   text_layer_set_text(s_value_layer, s_value_buf);
   text_layer_set_text(s_subtext_layer, s_subtext_buf);
+  layer_mark_dirty(s_canvas_layer);
 }
 
 static void prv_anim_timer_callback(void *context) {
@@ -215,8 +216,7 @@ static void prv_window_load(Window *window) {
   text_layer_set_font(s_subtext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   layer_add_child(window_layer, text_layer_get_layer(s_subtext_layer));
 
-  prv_update_card_text(s_current_card);
-
+  prv_update_card_text();
   s_anim_timer = app_timer_register(ANIM_FRAME_MS, prv_anim_timer_callback, NULL);
 }
 
@@ -261,6 +261,8 @@ static void prv_inbox_received_callback(DictionaryIterator *iter, void *context)
   if (t) {
     snprintf(s_print_state, sizeof(s_print_state), "%s", t->value->cstring);
   }
+
+  prv_update_card_text();
 }
 
 static void prv_inbox_dropped_callback(AppMessageResult reason, void *context) {
