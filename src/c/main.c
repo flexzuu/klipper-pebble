@@ -97,12 +97,6 @@ static void prv_click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_DOWN, prv_down_click_handler);
 }
 
-static void prv_canvas_update_proc(Layer *layer, GContext *context) {
-  GRect bounds = layer_get_bounds(layer);
-  bounds.size.h = s_icon_area_h;
-  prv_draw_card_icon(context, s_current_card, bounds);
-}
-
 static void prv_format_time_remaining(int seconds, char *buf, int buf_size) {
   if (seconds <= 0) {
     snprintf(buf, buf_size, "-- : --");
@@ -162,6 +156,13 @@ static void prv_update_card_text() {
   text_layer_set_text(s_value_layer, s_value_buf);
   text_layer_set_text(s_subtext_layer, s_subtext_buf);
   layer_mark_dirty(s_canvas_layer);
+}
+
+static void prv_canvas_update_proc(Layer *layer, GContext *context) {
+  GRect bounds = layer_get_bounds(layer);
+  bounds.size.h = s_icon_area_h;
+  prv_draw_card_icon(context, s_current_card, bounds);
+  prv_update_card_text();
 }
 
 static void prv_anim_timer_callback(void *context) {
