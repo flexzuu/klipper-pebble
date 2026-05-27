@@ -1,7 +1,0 @@
----
-CompileFlags:
-  Remove: [-mthumb, -mcpu=*]
-  Add: [-Wno-unknown-attributes, -Wno-gcc-compat]
-Diagnostics:
-  Suppress:
-    - pp_file_not_found  # in case some deep SDK header is missing
