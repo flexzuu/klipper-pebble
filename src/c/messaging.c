@@ -10,7 +10,7 @@ static const uint32_t s_outbox_size = 64;
 static int s_nozzle_temp = 0, s_nozzle_target = 0;
 static int s_bed_temp = 0, s_bed_target = 0;
 static int s_print_progress = 0, s_print_time_left = 0;
-static char s_print_state[16] = "standby";
+static char s_print_state[32] = "standby";
 
 static MessagingUpdateCallback s_on_update = NULL;
 

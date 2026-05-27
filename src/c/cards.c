@@ -12,7 +12,7 @@
 
 #define BG_BED    GColorOxfordBlue
 #define BG_NOZZLE GColorBulgarianRose
-#define BG_PRINT  GColorIndigo
+#define BG_PRINT  GColorMidnightGreen
 
 #define LABEL_TEXT_BED_TEMP "BED TEMP"
 #define LABEL_TEXT_NOZZLE   "NOZZLE"
@@ -310,10 +310,10 @@ void cards_window_load(Window *window) {
   text_layer_set_font(s_value_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   layer_add_child(window_layer, text_layer_get_layer(s_value_layer));
 
-  int sub_y = value_y + 34;
+  int sub_y = value_y + 32;
   s_subtext_layer = text_layer_create(GRect(0, sub_y, bounds.size.w, 22));
   text_layer_set_background_color(s_subtext_layer, GColorClear);
-  text_layer_set_text_color(s_subtext_layer, GColorDarkGray);
+  text_layer_set_text_color(s_subtext_layer, GColorLightGray);
   text_layer_set_text_alignment(s_subtext_layer, GTextAlignmentCenter);
   text_layer_set_font(s_subtext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   layer_add_child(window_layer, text_layer_get_layer(s_subtext_layer));
