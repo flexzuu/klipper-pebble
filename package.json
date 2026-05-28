@@ -1,5 +1,5 @@
 {
-  "name": "klipper-pebble",
+  "name": "klipper-monitor",
   "author": "Will Spooner",
   "version": "0.1.0",
   "keywords": [
@@ -10,7 +10,7 @@
     "@rebble/clay": "^1.0.10"
   },
   "pebble": {
-    "displayName": "Klipper",
+    "displayName": "Klipper Monitor",
     "uuid": "51584333-1ada-4460-8a16-f42fe191d654",
     "sdkVersion": "3",
     "enableMultiJS": true,
@@ -34,7 +34,14 @@
       "RequestUpdate"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "type": "png",
+          "name": "IMAGE_MENU_ICON",
+          "file": "images/icon.png",
+          "menuIcon": true
+        }
+      ]
     }
   }
 }

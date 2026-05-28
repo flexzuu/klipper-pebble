@@ -97,7 +97,7 @@ function stopPolling() {
 }
 
 Pebble.addEventListener('ready', function () {
-  console.log('PebbleKit JS ready - starting Klipper Pebble');
+  console.log('PebbleKit JS ready - starting Klipper Monitor');
   startPolling();
 });
 
