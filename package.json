@@ -31,6 +31,16 @@
       "PrintState",
       "PrintProgress",
       "PrintTimeLeft",
+      "PrinterName",
+      "PrinterIndex",
+      "PrinterCount",
+      "SelectPrinter",
+      "Printer1Name",
+      "Printer1Url",
+      "Printer2Name",
+      "Printer2Url",
+      "Printer3Name",
+      "Printer3Url",
       "RequestUpdate"
     ],
     "resources": {

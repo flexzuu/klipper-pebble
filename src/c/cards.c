@@ -38,6 +38,7 @@
 static TextLayer *s_label_layer;
 static TextLayer *s_value_layer;
 static TextLayer *s_subtext_layer;
+static TextLayer *s_printer_layer;
 static StatusBarLayer *s_status_bar;
 static Layer *s_canvas_layer;
 
@@ -49,6 +50,7 @@ static int s_transition_progress = 0;
 static char s_label_buf[32];
 static char s_value_buf[32];
 static char s_subtext_buf[32];
+static char s_printer_buf[48];
 
 static AppTimer *s_anim_timer = NULL;
 static int s_anim_frame = 0;
@@ -111,6 +113,12 @@ static void prv_set_heater_content(const char *label_text, int temp, int target)
 
 static void prv_update_card_text(void) {
   const char *print_state = messaging_get_print_state();
+  if (messaging_get_printer_count() > 1) {
+    snprintf(s_printer_buf, sizeof(s_printer_buf), "%s  %d/%d", messaging_get_printer_name(),
+             messaging_get_printer_index() + 1, messaging_get_printer_count());
+  } else {
+    snprintf(s_printer_buf, sizeof(s_printer_buf), "%s", messaging_get_printer_name());
+  }
 
   switch (s_current_card) {
   case CARD_BED:
@@ -136,6 +144,9 @@ static void prv_update_card_text(void) {
     } else if (strcmp(print_state, "error") == 0) {
       snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_ERROR);
       snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_ERROR);
+    } else if (strcmp(print_state, "config") == 0) {
+      snprintf(s_value_buf, sizeof(s_value_buf), "Setup");
+      snprintf(s_subtext_buf, sizeof(s_subtext_buf), "Configure printers");
     } else {
       snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_IDLE);
       snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_READY);
@@ -143,6 +154,7 @@ static void prv_update_card_text(void) {
     break;
   }
 
+  text_layer_set_text(s_printer_layer, s_printer_buf);
   text_layer_set_text(s_label_layer, s_label_buf);
   text_layer_set_text(s_value_layer, s_value_buf);
   text_layer_set_text(s_subtext_layer, s_subtext_buf);
@@ -270,9 +282,17 @@ static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context)
   prv_start_card_transition(-1);
 }
 
+static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  if (messaging_get_printer_count() <= 1) {
+    return;
+  }
+  messaging_select_next_printer();
+}
+
 void cards_click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_UP, prv_up_click_handler);
   window_single_click_subscribe(BUTTON_ID_DOWN, prv_down_click_handler);
+  window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click_handler);
 }
 
 void cards_window_load(Window *window) {
@@ -285,7 +305,16 @@ void cards_window_load(Window *window) {
   layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
 
   int content_y = STATUS_BAR_LAYER_HEIGHT;
-  int content_h = bounds.size.h - STATUS_BAR_LAYER_HEIGHT;
+  int printer_h = 20;
+  s_printer_layer = text_layer_create(GRect(0, content_y, bounds.size.w, printer_h));
+  text_layer_set_background_color(s_printer_layer, GColorBlack);
+  text_layer_set_text_color(s_printer_layer, GColorWhite);
+  text_layer_set_text_alignment(s_printer_layer, GTextAlignmentCenter);
+  text_layer_set_font(s_printer_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  layer_add_child(window_layer, text_layer_get_layer(s_printer_layer));
+
+  content_y += printer_h;
+  int content_h = bounds.size.h - content_y;
 
   s_canvas_layer = layer_create(GRect(0, content_y, bounds.size.w, content_h));
   layer_set_update_proc(s_canvas_layer, prv_canvas_update_proc);
@@ -329,6 +358,7 @@ void cards_window_unload(Window *window) {
   text_layer_destroy(s_label_layer);
   text_layer_destroy(s_value_layer);
   text_layer_destroy(s_subtext_layer);
+  text_layer_destroy(s_printer_layer);
   layer_destroy(s_canvas_layer);
   status_bar_layer_destroy(s_status_bar);
 }
