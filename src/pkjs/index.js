@@ -3,25 +3,110 @@ var clayConfig = require('./config');
 new Clay(clayConfig);
 
 const POLL_INTERVAL_MS = 10000;
+const MAX_PRINTERS = 3;
 
 var pollTimer = null;
+var selectedPrinterIndex = 0;
 
-function getMoonrakerUrl() {
+function getSettings() {
   var settings = localStorage.getItem('clay-settings');
   if (settings) {
     try {
-      var settings = JSON.parse(settings);
-      if (settings.MoonrakerUrl) {
-        return settings.MoonrakerUrl;
-      }
+      return JSON.parse(settings);
     } catch (e) {}
   }
-  return '';
+  return {};
+}
+
+function cleanUrl(url) {
+  return (url || '').replace(/\/+$/, '');
+}
+
+function getConfiguredPrinters() {
+  var settings = getSettings();
+  var printers = [];
+
+  for (var i = 1; i <= MAX_PRINTERS; i++) {
+    var url = cleanUrl(settings['Printer' + i + 'Url']);
+    if (url) {
+      printers.push({
+        name: settings['Printer' + i + 'Name'] || 'Printer ' + i,
+        url: url,
+      });
+    }
+  }
+
+  if (printers.length === 0 && settings.MoonrakerUrl) {
+    printers.push({
+      name: settings.Printer1Name || 'Printer 1',
+      url: cleanUrl(settings.MoonrakerUrl),
+    });
+  }
+
+  return printers;
+}
+
+function restoreSelectedPrinterIndex(printers) {
+  var storedIndex = parseInt(localStorage.getItem('selected-printer-index'), 10);
+  if (!isNaN(storedIndex)) {
+    selectedPrinterIndex = storedIndex;
+  }
+
+  if (selectedPrinterIndex < 0 || selectedPrinterIndex >= printers.length) {
+    selectedPrinterIndex = 0;
+  }
+}
+
+function getSelectedPrinter() {
+  var printers = getConfiguredPrinters();
+  restoreSelectedPrinterIndex(printers);
+
+  return {
+    printer: printers[selectedPrinterIndex] || null,
+    index: printers.length > 0 ? selectedPrinterIndex : 0,
+    count: printers.length,
+  };
+}
+
+function switchToNextPrinter() {
+  var printers = getConfiguredPrinters();
+  if (printers.length <= 1) {
+    return;
+  }
+
+  selectedPrinterIndex = (selectedPrinterIndex + 1) % printers.length;
+  localStorage.setItem('selected-printer-index', selectedPrinterIndex);
+  fetchPrinterStatus();
+}
+
+function sendPrinterState(state) {
+  var printerName = state.printer ? state.printer.name : 'No printer';
+  Pebble.sendAppMessage(
+    {
+      PrinterName: printerName,
+      PrinterIndex: state.index,
+      PrinterCount: state.count,
+      PrintState: state.printer ? 'error' : 'config',
+    },
+    function () {
+      console.log('Printer state sent to watch');
+    },
+    function (e) {
+      console.log('Send failed: ' + JSON.stringify(e));
+    }
+  );
 }
 
 function fetchPrinterStatus() {
+  var selected = getSelectedPrinter();
+  if (!selected.printer) {
+    console.log('No Moonraker URLs configured');
+    sendPrinterState(selected);
+    return;
+  }
+
   var url =
-    getMoonrakerUrl() +
+    selected.printer.url +
     '/printer/objects/query' +
     '?extruder=temperature,target' +
     '&heater_bed=temperature,target' +
@@ -51,6 +136,9 @@ function fetchPrinterStatus() {
       }
 
       var dict = {
+        PrinterName: selected.printer.name,
+        PrinterIndex: selected.index,
+        PrinterCount: selected.count,
         NozzleTemp: nozzleTemp,
         NozzleTarget: nozzleTarget,
         BedTemp: bedTemp,
@@ -75,9 +163,8 @@ function fetchPrinterStatus() {
   };
 
   req.onerror = function () {
-    console.log('XHR error - is Moonraker reachable?');
-    // Send an error state so the watch knows
-    Pebble.sendAppMessage({ PrintState: 'error' });
+    console.log('XHR error - is ' + selected.printer.name + ' reachable?');
+    sendPrinterState(selected);
   };
 
   req.open('GET', url);
@@ -106,5 +193,9 @@ Pebble.addEventListener('appmessage', function (e) {
   if (dict['RequestUpdate']) {
     console.log('Manual refresh requested');
     fetchPrinterStatus();
+  }
+  if (dict['SelectPrinter']) {
+    console.log('Switch printer requested');
+    switchToNextPrinter();
   }
 });
